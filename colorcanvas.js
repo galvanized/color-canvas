@@ -1,5 +1,13 @@
 "use strict";
+const canvasContainer = document.getElementById("canvascontainer");
 const canvas = document.getElementById("fullcanvas");
+const maxExtent = Math.max(canvasContainer.clientWidth, canvasContainer.clientHeight);
+let divisor = 1;
+while (maxExtent / divisor > 500) {
+    divisor++;
+}
+canvas.width = Math.floor(canvasContainer.clientWidth / divisor);
+canvas.height = Math.floor(canvasContainer.clientHeight / divisor);
 const width = canvas.width;
 const height = canvas.height;
 
@@ -162,13 +170,11 @@ let totalSteps = 0;
 
 const variStep = (maxSteps) => {
     let steps = Math.min(Math.floor((totalFrames + 1)**1.2), maxSteps);
-    console.log(steps);
     for (let i = 0; i < steps; i++) {
         randomStep();
     }
     totalSteps += steps;
     totalFrames++;
-    console.log(totalSteps);
 }
 
 const animate = () => {
