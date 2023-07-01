@@ -20,6 +20,14 @@ const mod = (n, m) => {
     return ((n % m) + m) % m;
 }
 
+const clamp = (x, min, max) => {
+    return Math.min(Math.max(x, min), max);
+}
+
+const clamp8 = (x) => {
+    return clamp(x, 0, 255);
+}
+
 var ctx = canvas.getContext("2d");
 var imgData = ctx.getImageData(0, 0, width, height);
 var data = imgData.data;
@@ -77,7 +85,7 @@ const coordToIndex = (x, y) => {
 const visited = new Array(width * height).fill(false);
 let edges = []; // freshly visited pixels
 
-edges.push(0); // initial pixel
+edges.push(Math.floor(height/2) * width + Math.floor(width/2)); // initial pixel
 
 const randomStep = (variation=10) => {
     // select a edge pixel at random
@@ -90,13 +98,16 @@ const randomStep = (variation=10) => {
     if (isNaN(edge)) {
         clearInterval(interval);
     }
-    console.log(edge, x, y);
+    //console.log(edge, x, y);
 
     const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
     let validIndexes = [];
     for (const direction of directions) {
-        const newX = mod(x + direction[0], width);
-        const newY = mod(y + direction[1], height);
+        const newX = x + direction[0];
+        if (newX < 0 || newX >= width) continue;
+        const newY = y + direction[1];
+        if (newY < 0 || newY >= height) continue;
+
         const newIndex = coordToIndex(newX, newY);
         if (!visited[newIndex]) {
             validIndexes.push(newIndex);
@@ -109,7 +120,7 @@ const randomStep = (variation=10) => {
         const oldRedIndex = edge * 4;
         const redIndex = newIndex * 4;
         for (let i = 0; i < 3; i++) {
-            data[redIndex + i] = mod(data[oldRedIndex + i] + randomIntInclusive(-variation, variation), 256);
+            data[redIndex + i] = clamp8(data[oldRedIndex + i] + randomIntInclusive(-variation, variation));
         }
 
 
@@ -127,12 +138,35 @@ const multiStep = (steps) => {
     }
 }
 
+let totalFrames = 0;
+let totalSteps = 0;
+
+const variStep = (maxSteps) => {
+    let steps = Math.min(Math.floor((totalFrames + 1)**1.2), maxSteps);
+    console.log(steps);
+    for (let i = 0; i < steps; i++) {
+        randomStep();
+    }
+    totalSteps += steps;
+    totalFrames++;
+}
+
+const animate = () => {
+    variStep(500);
+    draw();
+    if (edges.length > 0) {
+        requestAnimationFrame(animate);
+    }
+}
+
 
 initRGBA(186, 186, 186, 255);
 
-// increment and draw once every 100ms
+/*
 const interval = setInterval(() => {
-    multiStep(100);
+    multiStep(10);
     draw();
-}, 10);
+}, 50);
+*/
 
+animate();

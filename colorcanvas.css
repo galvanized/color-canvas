@@ -8,7 +8,8 @@ body{
     position: absolute;
     top: 0;
     left: 0;
+    object-fit: contain;
     width: 100%;
-    height: auto;
-    image-rendering: crisp-edges;
+    height: 100%;
+    image-rendering: pixelated;
 }
