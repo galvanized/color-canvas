@@ -29,12 +29,21 @@ const draw = () => {
     ctx.putImageData(imgData, 0, 0);
 }
 
-const initialize = () => {
+const initWhite = () => {
     // set all pixels to opaque white
     for (let i = 0; i < data.length; i+=4) {
         for (let j = 0; j < 4; j++) {
             data[i + j] = 255;
         }
+    }
+}
+
+const initRGBA = (r, g, b, a) => {
+    for (let i = 0; i < data.length; i+=4) {
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+        data[i + 3] = a;
     }
 }
 
@@ -47,7 +56,7 @@ const increment = () => {
     }
 }
 
-const randomStep = () => {
+const randomVary = () => {
     for (let i = 0; i < data.length; i+=4) {
         for (let j = 0; j < 3; j++) {
             data[i + j] = mod(data[i + j] + randomIntInclusive(-1, 1), 256);
@@ -55,11 +64,75 @@ const randomStep = () => {
     }
 }
 
-initialize();
+const indexToCoord = (index) => {
+    const x = index % width;
+    const y = Math.floor(index / width);
+    return [x, y];
+}
+
+const coordToIndex = (x, y) => {
+    return y * width + x;
+}
+
+const visited = new Array(width * height).fill(false);
+let edges = []; // freshly visited pixels
+
+edges.push(0); // initial pixel
+
+const randomStep = (variation=10) => {
+    // select a edge pixel at random
+    if (edges.length == 0) {
+        return;
+    }
+    const edgeIndex = randomIntInclusive(0, edges.length - 1);
+    const edge = edges[edgeIndex];
+    const [x, y] = indexToCoord(edge);
+    if (isNaN(edge)) {
+        clearInterval(interval);
+    }
+    console.log(edge, x, y);
+
+    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    let validIndexes = [];
+    for (const direction of directions) {
+        const newX = mod(x + direction[0], width);
+        const newY = mod(y + direction[1], height);
+        const newIndex = coordToIndex(newX, newY);
+        if (!visited[newIndex]) {
+            validIndexes.push(newIndex);
+        }
+    }
+
+    if (validIndexes.length > 0) {
+        const newIndex = validIndexes[randomIntInclusive(0, validIndexes.length - 1)];
+        
+        const oldRedIndex = edge * 4;
+        const redIndex = newIndex * 4;
+        for (let i = 0; i < 3; i++) {
+            data[redIndex + i] = mod(data[oldRedIndex + i] + randomIntInclusive(-variation, variation), 256);
+        }
+
+
+        visited[newIndex] = true;
+        edges.push(newIndex);
+    }
+    if (validIndexes.length <= 1) {
+        edges.splice(edgeIndex, 1);
+    }
+}
+
+const multiStep = (steps) => {
+    for (let i = 0; i < steps; i++) {
+        randomStep();
+    }
+}
+
+
+initRGBA(186, 186, 186, 255);
 
 // increment and draw once every 100ms
-setInterval(() => {
-    randomStep();
+const interval = setInterval(() => {
+    multiStep(100);
     draw();
-}, 100);
+}, 10);
 
