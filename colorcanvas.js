@@ -85,7 +85,7 @@ const coordToIndex = (x, y) => {
 const visited = new Array(width * height).fill(false);
 let edges = []; // freshly visited pixels
 
-edges.push(Math.floor(height/2) * width + Math.floor(width/2)); // initial pixel
+//edges.push(Math.floor(height/2) * width + Math.floor(width/2)); // initial pixel
 
 const randomStep = (variation=10) => {
     // select a edge pixel at random
@@ -95,9 +95,6 @@ const randomStep = (variation=10) => {
     const edgeIndex = randomIntInclusive(0, edges.length - 1);
     const edge = edges[edgeIndex];
     const [x, y] = indexToCoord(edge);
-    if (isNaN(edge)) {
-        clearInterval(interval);
-    }
     //console.log(edge, x, y);
 
     const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -132,6 +129,28 @@ const randomStep = (variation=10) => {
     }
 }
 
+
+function getCursorPosition(canvas, event) {
+    const rect = canvas.getBoundingClientRect()
+    // the below doesn't account for scaling
+    //const x = event.clientX - rect.left
+    //const y = event.clientY - rect.top
+    const x = Math.floor((event.clientX - rect.left) / (rect.right - rect.left) * width);
+    const y = Math.floor((event.clientY - rect.top) / (rect.bottom - rect.top) * height);
+    return [x, y];
+}
+
+// add clicked point to edges
+canvas.addEventListener('click', function(e) {
+    const [x, y] = getCursorPosition(canvas, e);
+    const index = coordToIndex(x, y);
+    if (!visited[index]) {
+        visited[index] = true;
+        edges.push(index);
+    }
+});
+
+
 const multiStep = (steps) => {
     for (let i = 0; i < steps; i++) {
         randomStep();
@@ -149,14 +168,13 @@ const variStep = (maxSteps) => {
     }
     totalSteps += steps;
     totalFrames++;
+    console.log(totalSteps);
 }
 
 const animate = () => {
     variStep(500);
     draw();
-    if (edges.length > 0) {
-        requestAnimationFrame(animate);
-    }
+    requestAnimationFrame(animate);
 }
 
 
