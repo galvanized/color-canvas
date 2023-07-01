@@ -169,7 +169,8 @@ let totalFrames = 0;
 let totalSteps = 0;
 
 const variStep = (maxSteps) => {
-    let steps = Math.min(Math.floor((totalFrames + 1)**1.2), maxSteps);
+    //let steps = Math.min(Math.floor((totalFrames + 1)**1.2), maxSteps);
+    let steps = clamp(Math.ceil(edges.length)/2, 1, maxSteps);
     for (let i = 0; i < steps; i++) {
         randomStep();
     }
