@@ -24,6 +24,66 @@ const randomIntInclusive = (min, max) => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// https://stackoverflow.com/a/17243070
+/* accepts parameters
+ * h  Object = {h:x, s:y, v:z}
+ * OR 
+ * h, s, v
+*/
+function HSVtoRGB(h, s, v) {
+    var r, g, b, i, f, p, q, t;
+    if (arguments.length === 1) {
+        s = h.s, v = h.v, h = h.h;
+    }
+    i = Math.floor(h * 6);
+    f = h * 6 - i;
+    p = v * (1 - s);
+    q = v * (1 - f * s);
+    t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = v, g = t, b = p; break;
+        case 1: r = q, g = v, b = p; break;
+        case 2: r = p, g = v, b = t; break;
+        case 3: r = p, g = q, b = v; break;
+        case 4: r = t, g = p, b = v; break;
+        case 5: r = v, g = p, b = q; break;
+    }
+    return {
+        r: Math.round(r * 255),
+        g: Math.round(g * 255),
+        b: Math.round(b * 255)
+    };
+}
+
+/* accepts parameters
+ * r  Object = {r:x, g:y, b:z}
+ * OR 
+ * r, g, b
+*/
+function RGBtoHSV(r, g, b) {
+    if (arguments.length === 1) {
+        g = r.g, b = r.b, r = r.r;
+    }
+    var max = Math.max(r, g, b), min = Math.min(r, g, b),
+        d = max - min,
+        h,
+        s = (max === 0 ? 0 : d / max),
+        v = max / 255;
+
+    switch (max) {
+        case min: h = 0; break;
+        case r: h = (g - b) + d * (g < b ? 6: 0); h /= 6 * d; break;
+        case g: h = (b - r) + d * 2; h /= 6 * d; break;
+        case b: h = (r - g) + d * 4; h /= 6 * d; break;
+    }
+
+    return {
+        h: h,
+        s: s,
+        v: v
+    };
+}
+
 const mod = (n, m) => {
     return ((n % m) + m) % m;
 }
@@ -81,6 +141,27 @@ const drawDebugBrightEdges = () => {
     ctx.putImageData(imgData, 0, 0);
 }
 
+const drawDebugGeneration = () => {
+    /*
+    Greyscale view of each pixel's generation, with white edges
+    */
+    const debugData = new Uint8ClampedArray(data);
+    for (let i = 0; i < debugData.length; i+=4) {
+        const genShade = Math.floor(pixelGeneration[Math.floor(i / 4)] * 2) % 256; // used for lightness
+        for (let j = 0; j < 3; j++) {
+            debugData[i + j] = genShade;
+        }
+    }
+    for (const edge of edges) {
+        const redIndex = edge * 4;
+        for (let i = 0; i < 3; i++) {
+            debugData[redIndex + i] = 255;
+        }
+    }
+    imgData.data.set(debugData);
+    ctx.putImageData(imgData, 0, 0);
+}
+
 const initWhite = () => {
     // set all pixels to opaque white
     for (let i = 0; i < data.length; i+=4) {
@@ -126,11 +207,11 @@ const coordToIndex = (x, y) => {
     return y * width + x;
 }
 
-const visited = new Array(width * height).fill(false);
-let maxAge = 50; // at ages around 20-30, the image degrades into edges that never resolve
-const pixelUpdateTime = new Uint16Array(width * height).fill(-maxAge); // last time pixel was updated, used to calculate age
-// note that at 60fps, frame time overflows at 1092 seconds ≈ 18 minutes
-let frameCount = 0;
+
+
+const pixelGeneration = new Uint16Array(width * height).fill(0);
+let maxGenDiff = 100; 
+let maxGen = 0;
 
 let edges = []; // freshly visited pixels
 
@@ -155,7 +236,7 @@ const randomStep = (variation=10) => {
         if (newY < 0 || newY >= height) continue;
 
         const newIndex = coordToIndex(newX, newY);
-        if (mod(frameCount - pixelUpdateTime[newIndex],0xFFFF) > maxAge) {
+        if (pixelGeneration[newIndex] == 0 || pixelGeneration[edge] - pixelGeneration[newIndex] >= maxGenDiff) {
             validIndexes.push(newIndex);
         }
     }
@@ -170,7 +251,10 @@ const randomStep = (variation=10) => {
         }
 
 
-        pixelUpdateTime[newIndex] = frameCount;
+        pixelGeneration[newIndex] = pixelGeneration[edge] + 1;
+        if (pixelGeneration[newIndex] > maxGen) {
+            maxGen = pixelGeneration[newIndex];
+        }
         edges.push(newIndex);
     }
     if (validIndexes.length <= 1) {
@@ -189,15 +273,27 @@ function getCursorPosition(canvas, event) {
     return [x, y];
 }
 
-// add clicked point to edges
-canvas.addEventListener('click', function(e) {
-    const [x, y] = getCursorPosition(canvas, e);
-    const index = coordToIndex(x, y);
-    if (!visited[index]) {
-        visited[index] = true;
-        edges.push(index);
-    }
+let lastMouseIndex = -1;
+canvas.addEventListener('mousemove', function(e) {
+    mouseHandler(e);
 });
+canvas.addEventListener('mousedown', function(e) {
+    mouseHandler(e);
+});
+
+const mouseHandler = (e) => {
+    // check if left mouse button is pressed
+    if (e.buttons % 2 == 1) {
+        const [x, y] = getCursorPosition(canvas, e);
+        const index = coordToIndex(x, y);
+        if (index != lastMouseIndex || e.type == 'mousedown') {
+            //pixelGeneration[index] = Math.max(pixelGeneration[index] + maxGenDiff + 1, maxGen);
+            pixelGeneration[index] = pixelGeneration[index] + maxGenDiff + 1
+            edges.push(index);
+            lastMouseIndex = index;
+        }
+    }
+}
 
 
 const multiStep = (steps) => {
@@ -213,12 +309,11 @@ const variStep = (maxSteps) => {
     for (let i = 0; i < steps; i++) {
         randomStep();
     }
-    frameCount = (frameCount + 1) % 0xFFFF;
 }
 
 const animate = () => {
-    variStep(500);
-    drawDebugBrightEdges();
+    variStep(1000);
+    drawDebugWhiteEdges();
     requestAnimationFrame(animate);
 }
 
