@@ -38,10 +38,46 @@ const clamp8 = (x) => {
 
 var ctx = canvas.getContext("2d");
 var imgData = ctx.getImageData(0, 0, width, height);
-var data = imgData.data;
+//var data = imgData.data;
+var data = new Uint8ClampedArray(imgData.data);
 
 
 const draw = () => {
+    imgData.data.set(data);
+    ctx.putImageData(imgData, 0, 0);
+}
+
+const drawDebugWhiteEdges = () => {
+    const debugData = new Uint8ClampedArray(data);
+    for (let i = 0; i < debugData.length; i+=4) {
+        for (let j = 0; j < 3; j++) {
+            debugData[i + j] -= 50;
+        }
+    }
+    for (const edge of edges) {
+        const redIndex = edge * 4;
+        for (let i = 0; i < 3; i++) {
+            debugData[redIndex + i] = 255;
+        }
+    }
+    imgData.data.set(debugData);
+    ctx.putImageData(imgData, 0, 0);
+}
+
+const drawDebugBrightEdges = () => {
+    const debugData = new Uint8ClampedArray(data);
+    for (let i = 0; i < debugData.length; i+=4) {
+        for (let j = 0; j < 3; j++) {
+            debugData[i + j] *= 0.25;
+        }
+    }
+    for (const edge of edges) {
+        const redIndex = edge * 4;
+        for (let i = 0; i < 3; i++) {
+            debugData[redIndex + i] = data[redIndex + i];
+        }
+    }
+    imgData.data.set(debugData);
     ctx.putImageData(imgData, 0, 0);
 }
 
@@ -91,6 +127,11 @@ const coordToIndex = (x, y) => {
 }
 
 const visited = new Array(width * height).fill(false);
+let maxAge = 50; // at ages around 20-30, the image degrades into edges that never resolve
+const pixelUpdateTime = new Uint16Array(width * height).fill(-maxAge); // last time pixel was updated, used to calculate age
+// note that at 60fps, frame time overflows at 1092 seconds ≈ 18 minutes
+let frameCount = 0;
+
 let edges = []; // freshly visited pixels
 
 //edges.push(Math.floor(height/2) * width + Math.floor(width/2)); // initial pixel
@@ -114,7 +155,7 @@ const randomStep = (variation=10) => {
         if (newY < 0 || newY >= height) continue;
 
         const newIndex = coordToIndex(newX, newY);
-        if (!visited[newIndex]) {
+        if (mod(frameCount - pixelUpdateTime[newIndex],0xFFFF) > maxAge) {
             validIndexes.push(newIndex);
         }
     }
@@ -129,7 +170,7 @@ const randomStep = (variation=10) => {
         }
 
 
-        visited[newIndex] = true;
+        pixelUpdateTime[newIndex] = frameCount;
         edges.push(newIndex);
     }
     if (validIndexes.length <= 1) {
@@ -165,8 +206,6 @@ const multiStep = (steps) => {
     }
 }
 
-let totalFrames = 0;
-let totalSteps = 0;
 
 const variStep = (maxSteps) => {
     //let steps = Math.min(Math.floor((totalFrames + 1)**1.2), maxSteps);
@@ -174,13 +213,12 @@ const variStep = (maxSteps) => {
     for (let i = 0; i < steps; i++) {
         randomStep();
     }
-    totalSteps += steps;
-    totalFrames++;
+    frameCount = (frameCount + 1) % 0xFFFF;
 }
 
 const animate = () => {
     variStep(500);
-    draw();
+    drawDebugBrightEdges();
     requestAnimationFrame(animate);
 }
 
