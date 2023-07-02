@@ -227,7 +227,8 @@ const randomStep = (variation=10) => {
     const [x, y] = indexToCoord(edge);
     //console.log(edge, x, y);
 
-    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // 4-connected / Von Neumann neighborhood / Manhattan distance 1
+    //const directions = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [-1, 1], [1, -1]]; // 8-connected / Moore neighborhood / Chebyshev distance 1
     let validIndexes = [];
     for (const direction of directions) {
         const newX = x + direction[0];
@@ -255,7 +256,9 @@ const randomStep = (variation=10) => {
         if (pixelGeneration[newIndex] > maxGen) {
             maxGen = pixelGeneration[newIndex];
         }
-        edges.push(newIndex);
+        if (!(newIndex in edges)) {
+            edges.push(newIndex);
+        }
     }
     if (validIndexes.length <= 1) {
         edges.splice(edgeIndex, 1);
