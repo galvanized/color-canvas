@@ -96,6 +96,10 @@ const clamp8 = (x) => {
     return clamp(x, 0, 255);
 }
 
+const arrays_equal = (a, b) => {
+    return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
 var ctx = canvas.getContext("2d");
 var imgData = ctx.getImageData(0, 0, width, height);
 //var data = imgData.data;
@@ -212,21 +216,15 @@ const coordToIndex = (x, y) => {
 const pixelGeneration = new Uint16Array(width * height).fill(0);
 let maxGenDiff = 100; 
 let maxGen = 0;
+let frameCount = 0;
 
 let edges = []; // freshly visited pixels
 
 //edges.push(Math.floor(height/2) * width + Math.floor(width/2)); // initial pixel
 
-const randomStep = (variation=10) => {
-    // select a edge pixel at random
-    if (edges.length == 0) {
-        return;
-    }
-    const edgeIndex = randomIntInclusive(0, edges.length - 1);
-    const edge = edges[edgeIndex];
-    const [x, y] = indexToCoord(edge);
-    //console.log(edge, x, y);
-
+const getValidNeighborIndexes = (index) => {
+    const [x, y] = indexToCoord(index);
+    
     const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]]; // 4-connected / Von Neumann neighborhood / Manhattan distance 1
     //const directions = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [-1, 1], [1, -1]]; // 8-connected / Moore neighborhood / Chebyshev distance 1
     let validIndexes = [];
@@ -237,11 +235,23 @@ const randomStep = (variation=10) => {
         if (newY < 0 || newY >= height) continue;
 
         const newIndex = coordToIndex(newX, newY);
-        if (pixelGeneration[newIndex] == 0 || pixelGeneration[edge] - pixelGeneration[newIndex] >= maxGenDiff) {
+        if (pixelGeneration[newIndex] == 0 || pixelGeneration[index] - pixelGeneration[newIndex] >= maxGenDiff) {
             validIndexes.push(newIndex);
         }
     }
+    return validIndexes;
+}
 
+const randomStep = (variation=10) => {
+    // select a edge pixel at random
+    if (edges.length == 0) {
+        return;
+    }
+    const edgeIndex = randomIntInclusive(0, edges.length - 1);
+    const edge = edges[edgeIndex];
+
+    const validIndexes = getValidNeighborIndexes(edge);
+    
     if (validIndexes.length > 0) {
         const newIndex = validIndexes[randomIntInclusive(0, validIndexes.length - 1)];
         
@@ -251,16 +261,25 @@ const randomStep = (variation=10) => {
             data[redIndex + i] = clamp8(data[oldRedIndex + i] + randomIntInclusive(-variation, variation));
         }
 
-
-        pixelGeneration[newIndex] = pixelGeneration[edge] + 1;
+        pixelGeneration[newIndex] = pixelGeneration[edge] + 1; // random increment leads to instability
         if (pixelGeneration[newIndex] > maxGen) {
             maxGen = pixelGeneration[newIndex];
         }
-        if (!(newIndex in edges)) {
+        /* if (!(newIndex in edges)) { // deduplication check breaks propegation to top edge. I don't know why
             edges.push(newIndex);
-        }
+        } */
+        edges.push(newIndex);
     }
     if (validIndexes.length <= 1) {
+        /*
+        Changing the value above changes the type of propegation.
+        With 4-connected:
+        4+: a single snake
+        3: two snakes
+        2: sparse front, leaves holes
+        1: normal propegation 
+        0: seems to be the same as 1
+        */
         edges.splice(edgeIndex, 1);
     }
 }
@@ -277,6 +296,7 @@ function getCursorPosition(canvas, event) {
 }
 
 let lastMouseIndex = -1;
+let lastMouseCoords = [-1, -1];
 canvas.addEventListener('mousemove', function(e) {
     mouseHandler(e);
 });
@@ -284,17 +304,67 @@ canvas.addEventListener('mousedown', function(e) {
     mouseHandler(e);
 });
 
+const nucleatePoint = (x, y) => {
+    const index = coordToIndex(x, y);
+    pixelGeneration[index] = Math.max(pixelGeneration[index] + maxGenDiff + 1, maxGen);
+    //pixelGeneration[index] = maxGen + 5;
+    edges.push(index);
+}
+
+const bresenham = (x0, y0, x1, y1, callback) => {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = (x0 < x1) ? 1 : -1;
+    const sy = (y0 < y1) ? 1 : -1;
+    let err = dx - dy;
+
+    let x = x0;
+    let y = y0;
+    
+    while (true) {
+        callback(x, y);
+        
+        if (x === x1 && y === y1) break;
+        
+        const e2 = 2 * err;
+        
+        if (e2 > -dy) {
+            err -= dy;
+            x += sx;
+        }
+        
+        if (e2 < dx) {
+            err += dx;
+            y += sy;
+        }
+    }
+};
+
+
+
 const mouseHandler = (e) => {
     // check if left mouse button is pressed
     if (e.buttons % 2 == 1) {
         const [x, y] = getCursorPosition(canvas, e);
         const index = coordToIndex(x, y);
-        if (index != lastMouseIndex || e.type == 'mousedown') {
-            //pixelGeneration[index] = Math.max(pixelGeneration[index] + maxGenDiff + 1, maxGen);
-            pixelGeneration[index] = pixelGeneration[index] + maxGenDiff + 1
-            edges.push(index);
-            lastMouseIndex = index;
+        if (e.type == 'mousedown'){
+            // fresh click, no line
+            nucleatePoint(x, y);
         }
+        else if (index != lastMouseIndex) {
+            // mousemove, draw line
+            const [lastX, lastY] = lastMouseCoords;
+            if (lastX == -1 && lastY == -1) {
+                return;
+            }
+            bresenham(lastX, lastY, x, y, nucleatePoint);
+        }
+        lastMouseIndex = index;
+        lastMouseCoords = [x, y];
+    }
+    else {
+        // invalidate coords (as to not draw lines when mouse is not pressed)
+        lastMouseCoords = [-1, -1];
     }
 }
 
@@ -312,6 +382,7 @@ const variStep = (maxSteps) => {
     for (let i = 0; i < steps; i++) {
         randomStep();
     }
+    frameCount++;
 }
 
 const animate = () => {
@@ -323,11 +394,11 @@ const animate = () => {
 
 initRGBA(186, 186, 186, 255);
 
-/*
-const interval = setInterval(() => {
+
+/* const interval = setInterval(() => {
     multiStep(10);
-    draw();
-}, 50);
-*/
+    drawDebugWhiteEdges();
+}, 200); */
+
 
 animate();
